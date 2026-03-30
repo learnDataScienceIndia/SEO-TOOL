@@ -1,12 +1,14 @@
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
+import os
 
 # ---------------------------
 # CONFIG
 # ---------------------------
-GROK_API_KEY = "xai-9jYZNeVaafUGsGxdYDg1boTPbBc6c92SWPZEojbu44WS9EzMTKm5yqMvdJQr9pYLUAZUuEleml1BJhah"
+GROK_API_KEY = os.getenv("xai-9jYZNeVaafUGsGxdYDg1boTPbBc6c92SWPZEojbu44WS9EzMTKm5yqMvdJQr9pYLUAZUuEleml1BJhah")
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
+MODEL = "grok-4-1-fast"
 
 # ---------------------------
 # PAGE SETUP
@@ -21,17 +23,23 @@ st.markdown("---")
 # ---------------------------
 # INPUTS
 # ---------------------------
-url = st.text_input("Enter Website URL")
-keyword = st.text_input("Target Keyword")
+col1, col2 = st.columns(2)
+
+with col1:
+    url = st.text_input("🌐 Website URL")
+
+with col2:
+    keyword = st.text_input("🔍 Target Keyword")
 
 analyze = st.button("Analyze")
 
 # ---------------------------
-# SCRAPE WEBSITE
+# SCRAPER
 # ---------------------------
 def scrape_website(url):
     try:
-        res = requests.get(url, timeout=10)
+        headers = {"User-Agent": "Mozilla/5.0"}
+        res = requests.get(url, headers=headers, timeout=10)
         soup = BeautifulSoup(res.text, "html.parser")
 
         title = soup.title.string if soup.title else ""
@@ -41,18 +49,23 @@ def scrape_website(url):
         if meta:
             meta_desc = meta.get("content", "")
 
-        text = " ".join([p.get_text() for p in soup.find_all("p")])
+        headings = " ".join([h.get_text() for h in soup.find_all(["h1", "h2", "h3"])])
+        paragraphs = " ".join([p.get_text() for p in soup.find_all("p")])
 
-        return f"""
+        content = f"""
         TITLE: {title}
         META DESCRIPTION: {meta_desc}
-        CONTENT: {text[:3000]}
+        HEADINGS: {headings[:1000]}
+        CONTENT: {paragraphs[:3000]}
         """
+
+        return content
+
     except Exception as e:
-        return f"Error scraping site: {e}"
+        return f"Error scraping website: {e}"
 
 # ---------------------------
-# GROK API CALL
+# GROK ANALYSIS
 # ---------------------------
 def analyze_with_grok(content, keyword):
     headers = {
@@ -61,63 +74,93 @@ def analyze_with_grok(content, keyword):
     }
 
     prompt = f"""
-    You are an elite SEO + CRO expert.
+You are an elite SEO + CRO strategist.
 
-    Analyze this landing page for:
-    1. Messaging clarity
-    2. Conversion rate optimization issues
-    3. SEO gaps
-    4. Funnel gaps
+Analyze the landing page and return output in EXACT sections:
 
-    Provide:
-    - Improved headline
-    - Better CTA suggestions
-    - SEO recommendations
-    - Conversion improvements
-    - Missing sections
+1. HEADLINE IMPROVEMENT
+2. CTA IMPROVEMENTS
+3. SEO ISSUES
+4. CRO ISSUES
+5. MISSING SECTIONS
+6. FUNNEL GAPS
+7. QUICK WINS
 
-    Target Keyword: {keyword}
+Target Keyword: {keyword}
 
-    Website Content:
-    {content}
-    """
+Website Data:
+{content}
+"""
 
     payload = {
-        "model": "grok-1",
+        "model": MODEL,
         "messages": [
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.7
     }
 
-    response = requests.post(GROK_API_URL, headers=headers, json=payload)
+    try:
+        response = requests.post(GROK_API_URL, headers=headers, json=payload)
 
-    if response.status_code == 200:
-        return response.json()["choices"][0]["message"]["content"]
-    else:
-        return f"Error: {response.text}"
+        if response.status_code == 200:
+            return response.json()["choices"][0]["message"]["content"]
+        else:
+            return f"❌ API Error:\n{response.text}"
+
+    except Exception as e:
+        return f"❌ Request Failed: {e}"
 
 # ---------------------------
-# MAIN LOGIC
+# DISPLAY FUNCTION
+# ---------------------------
+def display_sections(result):
+    sections = [
+        "HEADLINE IMPROVEMENT",
+        "CTA IMPROVEMENTS",
+        "SEO ISSUES",
+        "CRO ISSUES",
+        "MISSING SECTIONS",
+        "FUNNEL GAPS",
+        "QUICK WINS"
+    ]
+
+    for sec in sections:
+        if sec in result:
+            split_text = result.split(sec)
+            if len(split_text) > 1:
+                content = split_text[1].split("\n\n")[0]
+                st.subheader(f"📌 {sec}")
+                st.write(content)
+
+# ---------------------------
+# MAIN
 # ---------------------------
 if analyze:
-    if not url or not keyword:
-        st.warning("Please enter both URL and keyword.")
+
+    if not GROK_API_KEY:
+        st.error("❌ Missing GROK_API_KEY. Set environment variable first.")
+    elif not url or not keyword:
+        st.warning("⚠️ Please enter both URL and keyword.")
     else:
-        with st.spinner("Scraping website..."):
+        with st.spinner("🔍 Scraping website..."):
             content = scrape_website(url)
 
-        with st.spinner("Analyzing with AI..."):
+        with st.spinner("🧠 Running AI analysis..."):
             result = analyze_with_grok(content, keyword)
 
         st.markdown("---")
-        st.subheader("📊 Analysis Result")
-        st.write(result)
+
+        tab1, tab2 = st.tabs(["📊 Structured Report", "🧾 Raw Output"])
+
+        with tab1:
+            display_sections(result)
+
+        with tab2:
+            st.write(result)
 
 # ---------------------------
 # FOOTER
 # ---------------------------
 st.markdown("---")
-st.markdown(
-    "Developed by 👉 https://www.linkedin.com/in/vikasgoyaleng/"
-)
+st.markdown("👨‍💻 Developed by 👉 https://www.linkedin.com/in/vikasgoyaleng/")
