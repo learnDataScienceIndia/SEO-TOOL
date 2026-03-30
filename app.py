@@ -16,7 +16,7 @@ GROK_API_KEY = get_api_key()
 
 # 👉 TEMP fallback (for testing only)
 if not GROK_API_KEY:
-    GROK_API_KEY = "PASTE_YOUR_API_KEY_HERE"
+    GROK_API_KEY = "xai-9jYZNeVaafUGsGxdYDg1boTPbBc6c92SWPZEojbu44WS9EzMTKm5yqMvdJQr9pYLUAZUuEleml1BJhah"
 
 GROK_API_URL = "https://api.x.ai/v1/chat/completions"
 MODEL = "grok-4-1-fast"
